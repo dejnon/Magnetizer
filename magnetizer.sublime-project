@@ -1,0 +1,36 @@
+{
+    "folders":
+    [
+        {
+            "path": "application",
+            "name": "Classes"
+        },
+        {
+            "path": "bin",
+            "name": "Binaries"
+        },
+        {
+            "path": "lib",
+            "name": "Libraries"
+        },
+        {
+            "path": "tests",
+            "name": "Tests",
+            "file_exclude_patterns": ["*.css"]
+        }
+    ],
+    "settings":
+    {
+        "tab_size": 4,
+        "translate_tabs_to_spaces": true
+    },
+    "build_systems":
+    [
+        {
+            "name": "MAIN",
+            "cmd": ["/usr/local/bin/python", "-u", "/Users/danone/Desktop/magnetizer/main.py"],
+            "file_regex": "^[ ]*File \"(...*?)\", line ([0-9]*)",
+            "selector": "source.python"
+        }
+    ]
+}
