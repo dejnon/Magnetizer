@@ -4,13 +4,18 @@ from wx.lib.delayedresult import startWorker
 import array
 import numpy
 import thread
+import wx.lib.plot as plot
+
 
 from application.Visualization import Visualization
 
 class MainWindow(wx.Frame):
 
     def __init__(self, parent):
-        wx.Frame.__init__(self, parent)
+        wx.Frame.__init__(self, parent, 1, "Magnetizer", wx.DefaultPosition, size=(600, 400))
+        self.draw()
+
+    def draw(self):
         self.createMenu()
         self.drawInterface()
         self.bindings()
@@ -39,27 +44,53 @@ class MainWindow(wx.Frame):
         self.Close()
 
     def drawInterface(self):
-        self.label = wx.StaticText(self, label="Ready")
-        self.btn = wx.Button(self, label="Start")
-        self.gauge = wx.Gauge(self)
+        # OPTIONS
+        updatingOptions = wx.BoxSizer(wx.VERTICAL)
+        self.SetSizer(updatingOptions)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.label, proportion=1, flag=wx.EXPAND)
-        sizer.Add(self.btn, proportion=0, flag=wx.EXPAND)
-        sizer.Add(self.gauge, proportion=0, flag=wx.EXPAND)
+        # self.label = wx.StaticText(self, label="Ready")
+        # updatingOptions.Add(self.label)
 
-        self.SetSizerAndFit(sizer)
+        # self.btn = wx.Button(self, label="Start")
+        # updatingOptions.Add(self.btn)
+        # self.btn.Bind(wx.EVT_BUTTON, self.onButton)
 
-        self.Bind(wx.EVT_BUTTON, self.onButton)
-        # wx.Button(self, wx.ID_EXIT, 'Close', (50, 130))
-        # self.panel = wx.Panel(self)
-        # self.sizerPanel = wx.BoxSizer()
-        # self.sizerPanel.Add(self.panel, proportion=1, flag=wx.EXPAND)
-        # self.sizerMain = wx.BoxSizer()
-        # self.drawingDB = Visualization(self.panel, size=(300, 300))
-        # self.sizerMain.Add(self.drawingDB, 1, wx.ALL | wx.EXPAND, 5)
-        # self.panel.SetSizerAndFit(self.sizerMain)
-        # self.SetSizerAndFit(self.sizerPanel)
+        # self.gauge = wx.Gauge(self)
+        # updatingOptions.Add(self.gauge)
+
+        # self.visualization = Visualization(self)
+        # updatingOptions.Add(self.visualization)
+
+        # self.btn_start = wx.Button(self, label="START VISUALIZATION")
+        # updatingOptions.Add(self.btn_start)
+        # self.btn_start.Bind(wx.EVT_BUTTON, self.longVizualization)
+
+
+        Button1 = wx.Button(self, -1, "Update", (200,220))
+        Button1.Bind(wx.EVT_BUTTON, self.redraw)
+
+        plotter = plot.PlotCanvas(self)
+        plotter.SetInitialSize(size=(500, 200))
+
+        data = [[1, 10], [2, 5], [3, 10], [4, 5]]
+        line = plot.PolyLine(data, colour='red', width=1)
+
+        gc = plot.PlotGraphics([line], 'Test', 'x', 'y')
+        plotter.Draw(gc)
+
+    def redraw(self, event):
+        plotter = plot.PlotCanvas(self)
+        plotter.SetInitialSize(size=(500, 200))
+
+        data2 = [[1, 20], [2, 15], [3, 20], [4, -10]]
+        line = plot.PolyLine(data2, colour='red', width=1)
+
+        gc = plot.PlotGraphics([line], 'Test', 'x', 'y')
+        plotter.Draw(gc)
+
+    def longVizualization(self, event):
+        thread.start_new_thread(self.visualization.draw, (self, self))
+        wx.Yield()
 
     def onButton(self, evt):
         self.btn.Enable(False)
@@ -74,11 +105,11 @@ class MainWindow(wx.Frame):
 
     def longRunning(self):
         """This runs in a different thread.  Sleep is used to simulate a long running task."""
-        time.sleep(3)
+        time.sleep(1)
         wx.CallAfter(self.gauge.SetValue, 20)
-        time.sleep(5)
+        time.sleep(2)
         wx.CallAfter(self.gauge.SetValue, 50)
         time.sleep(1)
         wx.CallAfter(self.gauge.SetValue, 70)
-        time.sleep(10)
+        time.sleep(2)
         wx.CallAfter(self.onLongRunDone)

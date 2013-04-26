@@ -176,6 +176,9 @@
 	},
 	"file_history":
 	[
+		"/Users/danone/Documents/_Uniwersytet_/Modelarnia/Magnetizer/application/Updating.py",
+		"/Users/danone/Documents/_Uniwersytet_/Modelarnia/Magnetizer/application/MainWindow.py",
+		"/Users/danone/Documents/_Uniwersytet_/Modelarnia/Magnetizer/application/Visualization.py",
 		"/Users/danone/Desktop/magnetizer/.sublime-project",
 		"/Users/danone/Desktop/magnetizer/application/MainWindow.py",
 		"/Users/danone/Desktop/myfirstwxgui.py",
@@ -300,10 +303,7 @@
 		"/Users/danone/Desktop/rosnace",
 		"/Users/danone/Desktop/9_przyrost_malejace_obc",
 		"/Users/danone/Desktop/9_przyrost_rosnace_obc",
-		"/Users/danone/Desktop/clockworkmod/9_przyrost_rosnace_obc",
-		"/Users/danone/Desktop/helloworld.ml",
-		"/Users/danone/Desktop/helloworld.scala",
-		"/Users/danone/Desktop/labassignment.ml"
+		"/Users/danone/Desktop/clockworkmod/9_przyrost_rosnace_obc"
 	],
 	"find":
 	{
@@ -512,6 +512,6 @@
 	"show_open_files": false,
 	"show_tabs": true,
 	"side_bar_visible": true,
-	"side_bar_width": 147.0,
+	"side_bar_width": 131.0,
 	"status_bar_visible": true
 }
