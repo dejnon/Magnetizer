@@ -6,6 +6,30 @@ SPIN_UP = 1
 SPIN_DOWN = 0
 
 class Updating():
+    """ A silly class that generates pseudo-random data for
+        display in the plot.
+    """
+    def __init__(self, init=50):
+        self.data = self.init = init
+
+    def next(self):
+        self._recalc_data()
+        return self.data
+
+    def _recalc_data(self):
+        delta = random.uniform(-0.5, 0.5)
+        r = random.random()
+
+        if r > 0.9:
+            self.data += delta * 15
+        elif r > 0.8:
+            # attraction to the initial value
+            delta += (0.5 if self.init > self.data else -0.5)
+            self.data += delta
+        else:
+            self.data += delta
+
+
     def random_spins(size):
       return [ random.randrange(0, 2) for _ in range(0, 15) ]
 
@@ -84,20 +108,14 @@ class Updating():
     # csequential(S, w0, 0.1, 4000)
 
 
-
-
-
-
     # SYNCHRONOUS UPDATING
     # Iterate over spins. With propability w0 flip the spin
     def synchronous(spins, w0, timeout, iteration_callback=prints):
       while timeout:
         spins_copy = list(spins)
         for index in xrange(0,len(spins)):
-
-
-        random_index = randint(0, len(spins)-1)
-        (spin_left, spin_right) = getNeigbours(random_index, spins)
+          random_index = randint(0, len(spins)-1)
+          (spin_left, spin_right) = getNeigbours(random_index, spins)
         if spin_left == spin_right:
           S[random_index] = spin_left
         elif w0(i=random_index, L=len(spins)) < randfloat():
