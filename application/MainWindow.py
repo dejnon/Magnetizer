@@ -1,115 +1,237 @@
-import time
+import os
+import pprint
+import random
+import sys
 import wx
-from wx.lib.delayedresult import startWorker
-import array
-import numpy
-import thread
-import wx.lib.plot as plot
 
+# The recommended way to use wx with mpl is with the WXAgg
+# backend.
+#
+import matplotlib
+matplotlib.use('WXAgg')
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_wxagg import \
+    FigureCanvasWxAgg as FigCanvas, \
+    NavigationToolbar2WxAgg as NavigationToolbar
+import numpy as np
+import pylab
 
-from application.Visualization import Visualization
+from Updating import Updating
+from Dashboard import Dashboard
 
 class MainWindow(wx.Frame):
+    """ The main frame of the application
+    """
+    title = 'Demo: dynamic matplotlib graph'
 
-    def __init__(self, parent):
-        wx.Frame.__init__(self, parent, 1, "Magnetizer", wx.DefaultPosition, size=(600, 400))
-        self.draw()
+    def __init__(self):
+        wx.Frame.__init__(self, None, -1, self.title)
 
-    def draw(self):
-        self.createMenu()
-        self.drawInterface()
-        self.bindings()
-        self.Show()
+        self.datagen = Updating()
+        self.data = [self.datagen.next()]
+        self.paused = False
 
-    def createMenu(self):
-        menubar = wx.MenuBar()
-        file = wx.Menu()
-        edit = wx.Menu()
-        help = wx.Menu()
-        file.AppendSeparator()
-        quit = wx.MenuItem(file, 105, '&Quit\tCtrl+Q', 'Quit the Application', wx.ITEM_NORMAL)
-        wx.EVT_MENU(self, 105, self.OnQuit )
-        file.AppendItem(quit)
-        menubar.Append(file, '&File')
-        menubar.Append(edit, '&Edit')
-        menubar.Append(help, '&Help')
-        self.SetMenuBar(menubar)
-        self.CreateStatusBar()
+        self.create_menu()
+        self.create_status_bar()
+        self.create_main_panel()
 
-    def bindings(self):
-        False
-        # self.Bind(wx.EVT_BUTTON, self.OnQuitApp, id=wx.ID_EXIT)
+        self.redraw_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.on_redraw_timer, self.redraw_timer)
+        self.redraw_timer.Start(100)
 
-    def OnQuit(self, event):
-        self.Close()
+    def create_menu(self):
+        self.menubar = wx.MenuBar()
 
-    def drawInterface(self):
-        # OPTIONS
-        updatingOptions = wx.BoxSizer(wx.VERTICAL)
-        self.SetSizer(updatingOptions)
+        menu_file = wx.Menu()
+        m_expt = menu_file.Append(-1, "&Save plot\tCtrl-S", "Save plot to file")
+        self.Bind(wx.EVT_MENU, self.on_save_plot, m_expt)
+        menu_file.AppendSeparator()
+        m_exit = menu_file.Append(-1, "E&xit\tCtrl-X", "Exit")
+        self.Bind(wx.EVT_MENU, self.on_exit, m_exit)
 
-        # self.label = wx.StaticText(self, label="Ready")
-        # updatingOptions.Add(self.label)
+        self.menubar.Append(menu_file, "&File")
+        self.SetMenuBar(self.menubar)
 
-        # self.btn = wx.Button(self, label="Start")
-        # updatingOptions.Add(self.btn)
-        # self.btn.Bind(wx.EVT_BUTTON, self.onButton)
+    def create_main_panel(self):
+        self.panel = wx.Panel(self)
 
-        # self.gauge = wx.Gauge(self)
-        # updatingOptions.Add(self.gauge)
+        self.init_plot()
+        self.canvas = FigCanvas(self.panel, -1, self.fig)
 
-        # self.visualization = Visualization(self)
-        # updatingOptions.Add(self.visualization)
+        self.xmin_control = Dashboard(self.panel, -1, "X min", 0)
+        self.xmax_control = Dashboard(self.panel, -1, "X max", 50)
+        self.ymin_control = Dashboard(self.panel, -1, "Y min", 0)
+        self.ymax_control = Dashboard(self.panel, -1, "Y max", 100)
 
-        # self.btn_start = wx.Button(self, label="START VISUALIZATION")
-        # updatingOptions.Add(self.btn_start)
-        # self.btn_start.Bind(wx.EVT_BUTTON, self.longVizualization)
+        self.pause_button = wx.Button(self.panel, -1, "Pause")
+        self.Bind(wx.EVT_BUTTON, self.on_pause_button, self.pause_button)
+        self.Bind(wx.EVT_UPDATE_UI, self.on_update_pause_button, self.pause_button)
 
+        self.cb_grid = wx.CheckBox(self.panel, -1,
+            "Show Grid",
+            style=wx.ALIGN_RIGHT)
+        self.Bind(wx.EVT_CHECKBOX, self.on_cb_grid, self.cb_grid)
+        self.cb_grid.SetValue(True)
 
-        Button1 = wx.Button(self, -1, "Update", (200,220))
-        Button1.Bind(wx.EVT_BUTTON, self.redraw)
+        self.cb_xlab = wx.CheckBox(self.panel, -1,
+            "Show X labels",
+            style=wx.ALIGN_RIGHT)
+        self.Bind(wx.EVT_CHECKBOX, self.on_cb_xlab, self.cb_xlab)
+        self.cb_xlab.SetValue(True)
 
-        plotter = plot.PlotCanvas(self)
-        plotter.SetInitialSize(size=(500, 200))
+        self.hbox1 = wx.BoxSizer(wx.HORIZONTAL)
+        self.hbox1.Add(self.pause_button, border=5, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+        self.hbox1.AddSpacer(20)
+        self.hbox1.Add(self.cb_grid, border=5, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+        self.hbox1.AddSpacer(10)
+        self.hbox1.Add(self.cb_xlab, border=5, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL)
 
-        data = [[1, 10], [2, 5], [3, 10], [4, 5]]
-        line = plot.PolyLine(data, colour='red', width=1)
+        self.hbox2 = wx.BoxSizer(wx.HORIZONTAL)
+        self.hbox2.Add(self.xmin_control, border=5, flag=wx.ALL)
+        self.hbox2.Add(self.xmax_control, border=5, flag=wx.ALL)
+        self.hbox2.AddSpacer(24)
+        self.hbox2.Add(self.ymin_control, border=5, flag=wx.ALL)
+        self.hbox2.Add(self.ymax_control, border=5, flag=wx.ALL)
 
-        gc = plot.PlotGraphics([line], 'Test', 'x', 'y')
-        plotter.Draw(gc)
+        self.vbox = wx.BoxSizer(wx.VERTICAL)
+        self.vbox.Add(self.canvas, 1, flag=wx.LEFT | wx.TOP | wx.GROW)
+        self.vbox.Add(self.hbox1, 0, flag=wx.ALIGN_LEFT | wx.TOP)
+        self.vbox.Add(self.hbox2, 0, flag=wx.ALIGN_LEFT | wx.TOP)
 
-    def redraw(self, event):
-        plotter = plot.PlotCanvas(self)
-        plotter.SetInitialSize(size=(500, 200))
+        self.panel.SetSizer(self.vbox)
+        self.vbox.Fit(self)
 
-        data2 = [[1, 20], [2, 15], [3, 20], [4, -10]]
-        line = plot.PolyLine(data2, colour='red', width=1)
+    def create_status_bar(self):
+        self.statusbar = self.CreateStatusBar()
 
-        gc = plot.PlotGraphics([line], 'Test', 'x', 'y')
-        plotter.Draw(gc)
+    def init_plot(self):
+        self.dpi = 100
+        self.fig = Figure((3.0, 3.0), dpi=self.dpi)
 
-    def longVizualization(self, event):
-        thread.start_new_thread(self.visualization.draw, (self, self))
-        wx.Yield()
+        self.axes = self.fig.add_subplot(111)
+        self.axes.set_axis_bgcolor('black')
+        self.axes.set_title('Very important random data', size=12)
 
-    def onButton(self, evt):
-        self.btn.Enable(False)
-        self.gauge.SetValue(0)
-        self.label.SetLabel("Running")
-        thread.start_new_thread(self.longRunning, ())
+        pylab.setp(self.axes.get_xticklabels(), fontsize=8)
+        pylab.setp(self.axes.get_yticklabels(), fontsize=8)
 
-    def onLongRunDone(self):
-        self.gauge.SetValue(100)
-        self.label.SetLabel("Done")
-        self.btn.Enable(True)
+        # plot the data as a line series, and save the reference
+        # to the plotted line series
+        #
+        self.plot_data = self.axes.plot(
+            self.data,
+            linewidth=1,
+            color=(1, 1, 0),
+            )[0]
 
-    def longRunning(self):
-        """This runs in a different thread.  Sleep is used to simulate a long running task."""
-        time.sleep(1)
-        wx.CallAfter(self.gauge.SetValue, 20)
-        time.sleep(2)
-        wx.CallAfter(self.gauge.SetValue, 50)
-        time.sleep(1)
-        wx.CallAfter(self.gauge.SetValue, 70)
-        time.sleep(2)
-        wx.CallAfter(self.onLongRunDone)
+    def draw_plot(self):
+        """ Redraws the plot
+        """
+        # when xmin is on auto, it "follows" xmax to produce a
+        # sliding window effect. therefore, xmin is assigned after
+        # xmax.
+        #
+        if self.xmax_control.is_auto():
+            xmax = len(self.data) if len(self.data) > 50 else 50
+        else:
+            xmax = int(self.xmax_control.manual_value())
+
+        if self.xmin_control.is_auto():
+            xmin = xmax - 50
+        else:
+            xmin = int(self.xmin_control.manual_value())
+
+        # for ymin and ymax, find the minimal and maximal values
+        # in the data set and add a mininal margin.
+        #
+        # note that it's easy to change this scheme to the
+        # minimal/maximal value in the current display, and not
+        # the whole data set.
+        #
+        if self.ymin_control.is_auto():
+            ymin = round(min(self.data), 0) - 1
+        else:
+            ymin = int(self.ymin_control.manual_value())
+
+        if self.ymax_control.is_auto():
+            ymax = round(max(self.data), 0) + 1
+        else:
+            ymax = int(self.ymax_control.manual_value())
+
+        self.axes.set_xbound(lower=xmin, upper=xmax)
+        self.axes.set_ybound(lower=ymin, upper=ymax)
+
+        # anecdote: axes.grid assumes b=True if any other flag is
+        # given even if b is set to False.
+        # so just passing the flag into the first statement won't
+        # work.
+        #
+        if self.cb_grid.IsChecked():
+            self.axes.grid(True, color='gray')
+        else:
+            self.axes.grid(False)
+
+        # Using setp here is convenient, because get_xticklabels
+        # returns a list over which one needs to explicitly
+        # iterate, and setp already handles this.
+        #
+        pylab.setp(self.axes.get_xticklabels(),
+            visible=self.cb_xlab.IsChecked())
+
+        self.plot_data.set_xdata(np.arange(len(self.data)))
+        self.plot_data.set_ydata(np.array(self.data))
+
+        self.canvas.draw()
+
+    def on_pause_button(self, event):
+        self.paused = not self.paused
+
+    def on_update_pause_button(self, event):
+        label = "Resume" if self.paused else "Pause"
+        self.pause_button.SetLabel(label)
+
+    def on_cb_grid(self, event):
+        self.draw_plot()
+
+    def on_cb_xlab(self, event):
+        self.draw_plot()
+
+    def on_save_plot(self, event):
+        file_choices = "PNG (*.png)|*.png"
+
+        dlg = wx.FileDialog(
+            self,
+            message="Save plot as...",
+            defaultDir=os.getcwd(),
+            defaultFile="plot.png",
+            wildcard=file_choices,
+            style=wx.SAVE)
+
+        if dlg.ShowModal() == wx.ID_OK:
+            path = dlg.GetPath()
+            self.canvas.print_figure(path, dpi=self.dpi)
+            self.flash_status_message("Saved to %s" % path)
+
+    def on_redraw_timer(self, event):
+        # if paused do not add data, but still redraw the plot
+        # (to respond to scale modifications, grid change, etc.)
+        #
+        if not self.paused:
+            self.data.append(self.datagen.next())
+
+        self.draw_plot()
+
+    def on_exit(self, event):
+        self.Destroy()
+
+    def flash_status_message(self, msg, flash_len_ms=1500):
+        self.statusbar.SetStatusText(msg)
+        self.timeroff = wx.Timer(self)
+        self.Bind(
+            wx.EVT_TIMER,
+            self.on_flash_status_off,
+            self.timeroff)
+        self.timeroff.Start(flash_len_ms, oneShot=True)
+
+    def on_flash_status_off(self, event):
+        self.statusbar.SetStatusText('')
