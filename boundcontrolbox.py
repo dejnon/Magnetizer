@@ -4,18 +4,7 @@ import random
 import sys
 import wx
 
-# The recommended way to use wx with mpl is with the WXAgg
-# backend.
-#
-import matplotlib
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_wxagg import \
-    FigureCanvasWxAgg as FigCanvas, \
-    NavigationToolbar2WxAgg as NavigationToolbar
-import numpy as np
-import pylab
-
-class Dashboard(wx.Panel):
+class BoundControlBox(wx.Panel):
     """ A static box with a couple of radio buttons and a text
         box. Allows to switch between an automatic mode and a
         manual mode with an associated value.
