@@ -18,23 +18,25 @@ from boundcontrolbox import BoundControlBox
 
 class GraphFrame(wx.Frame):
     title = 'Magnetizr'
+    time_step = 100 # 100ms
     def __init__(self):
         wx.Frame.__init__(self, None, -1, self.title, size=(950,590))
 
         self.datagen = DataGen()
-        self.data = [self.datagen.next()]
+        self.data = [self.datagen.initialise()]
         self.paused = True
+        self.running = False
 
-        self.create_menu()          # +shortcuts
+        self.create_menu()          # shortcuts
         self.create_status_bar()    # line at the bottom
 
         self.MainGrid = wx.FlexGridSizer( 2, 2, 0, 0 )
         self.init_plot()            # "the drawing place"
-        self.draw_interface()
+        self.draw_interface()       # controls
 
         self.redraw_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.on_redraw_timer, self.redraw_timer)
-        self.redraw_timer.Start(100)
+        self.redraw_timer.Start(self.time_step)
 
     def create_menu(self):
         self.menubar = wx.MenuBar()
@@ -49,9 +51,6 @@ class GraphFrame(wx.Frame):
 
     def create_status_bar(self):
         self.statusbar = self.CreateStatusBar()
-
-    def update_mode(self, event):
-        print "hello"
 
     def draw_interface(self):
         self.SetSizeHintsSz( wx.DefaultSize, wx.DefaultSize )
@@ -71,7 +70,7 @@ class GraphFrame(wx.Frame):
         UpdateModes = ["Sequential", "Synchronous", "CSequential"]
         Update = wx.RadioBox(self, wx.ID_ANY, "Update Mode",  wx.DefaultPosition, wx.DefaultSize, UpdateModes, 1, wx.RA_SPECIFY_COLS)
         Updatable.Add( Update, 1, wx.EXPAND|wx.ALIGN_CENTER_HORIZONTAL, 5 )
-        Update.Bind(wx.EVT_RADIOBUTTON, self.update_mode)
+        Update.Bind(wx.EVT_RADIOBUTTON, self.on_update_mode)
         #   Plot view
         PlotView = wx.RadioBox(self, wx.ID_ANY, "Plot view",  wx.DefaultPosition, wx.DefaultSize, ["Follow", "See all"], 1, wx.RA_SPECIFY_COLS)
         Updatable.Add( PlotView, 1, wx.EXPAND, 5 )
@@ -85,18 +84,28 @@ class GraphFrame(wx.Frame):
         self.W0 = wx.TextCtrl( self, wx.ID_ANY, u"(cL/L)*i*1.0", wx.DefaultPosition, wx.DefaultSize, 0 )
         WZero.Add( self.W0, 0, wx.ALL, 5 )
         Updatable.Add( WZero, 1, wx.EXPAND, 5 )
+        #   Simulation speed
+        SimulSpeed = wx.StaticBoxSizer( wx.StaticBox( self, wx.ID_ANY, u"Timestep lenght" ), wx.VERTICAL )
+        self.SimSpeed = wx.Slider( self, wx.ID_ANY, 100, 0, 1000, wx.DefaultPosition, wx.DefaultSize, wx.SL_HORIZONTAL )
+        SimulSpeed.Add( self.SimSpeed, 0, wx.ALL, 5 )
+        self.SimSpeedTxt = wx.StaticText(self, wx.ID_ANY, "100ms", wx.DefaultPosition, wx.DefaultSize)
+        SimulSpeed.Add( self.SimSpeedTxt, 0, wx.ALL, 5 )
+        Updatable.Add( SimulSpeed, 1, 0, 5 )
 
         # SIMULATION CONTROLS
         Simulation = wx.StaticBoxSizer( wx.StaticBox( self, wx.ID_ANY, u"Simulation" ), wx.HORIZONTAL )
         #   Starting conditions
-        StartConditions = wx.RadioBox(self, wx.ID_ANY, "Plot view",  wx.DefaultPosition, wx.DefaultSize, ["Ferromagnet", "Antiferromagnet", "Random"], 1, wx.RA_SPECIFY_COLS)
-        Simulation.Add( StartConditions, 1, wx.EXPAND, 5 )
+        self.StartConditions = wx.RadioBox(self, wx.ID_ANY, "Starting",  wx.DefaultPosition, wx.DefaultSize, ["Ferromagnet", "Antiferromagnet", "Random"], 1, wx.RA_SPECIFY_COLS)
+        Simulation.Add( self.StartConditions, 1, wx.EXPAND, 5 )
+        self.StartConditions.Bind(wx.EVT_RADIOBUTTON, self.on_update_start)
         #   Boundaries
-        Boundaries = wx.RadioBox(self, wx.ID_ANY, "Plot view",  wx.DefaultPosition, wx.DefaultSize, ["Cyclic", "Sharp(table)"], 1, wx.RA_SPECIFY_COLS)
-        Simulation.Add( Boundaries, 1, wx.EXPAND, 5 )
+        self.Boundaries = wx.RadioBox(self, wx.ID_ANY, "Boundaries",  wx.DefaultPosition, wx.DefaultSize, ["Cyclic", "Sharp(table)"], 1, wx.RA_SPECIFY_COLS)
+        Simulation.Add( self.Boundaries, 1, wx.EXPAND, 5 )
+        self.Boundaries.Bind(wx.EVT_RADIOBUTTON, self.on_update_boundaries)
         #   Time steps
         TimeSteps = wx.StaticBoxSizer( wx.StaticBox( self, wx.ID_ANY, u"Time steps" ), wx.VERTICAL )
         self.Time = wx.TextCtrl( self, wx.ID_ANY, u"100", wx.DefaultPosition, wx.DefaultSize, 0 )
+        wx.EVT_KEY_UP(self.Time, self.on_update_time_steps)
         TimeSteps.Add( self.Time, 0, wx.ALL, 5 )
         Simulation.Add( TimeSteps, 1, wx.EXPAND, 5 )
         #   Startstop
@@ -104,6 +113,9 @@ class GraphFrame(wx.Frame):
         self.StartStopBtn = wx.Button(self, label="Start")
         self.Bind(wx.EVT_BUTTON, self.on_pause_button ,self.StartStopBtn)
         StartStop.Add( self.StartStopBtn, 0, wx.ALL, 5 )
+        self.ResetBtn = wx.Button(self, label="Reset")
+        self.Bind(wx.EVT_BUTTON, self.on_reset_button ,self.ResetBtn)
+        StartStop.Add( self.ResetBtn, 0, wx.ALL, 5 )
         Simulation.Add( StartStop, 1, wx.EXPAND, 5 )
 
         self.MainGrid.Add( Plot, 1, wx.ALIGN_LEFT|wx.ALIGN_TOP, 5 )
@@ -130,8 +142,18 @@ class GraphFrame(wx.Frame):
 
     def on_pause_button(self, event):
         self.paused = not self.paused
-        label = "Start" if self.paused else "Stop"
-        self.StartStopBtn.SetLabel(label)
+        self.StartStopBtn.SetLabel("Start" if self.paused else "Stop")
+        if not self.running:
+            self.running = True
+            self.data = [self.datagen.next()]
+            self.plot_data = self.axes.matshow(self.data, aspect='auto')
+
+    def on_reset(self, event):
+        self.paused = True
+        self.StartStopBtn.SetLabel("Start")
+        self.running = False
+        self.data = [self.datagen.initialise()]
+        self.plot_data = self.axes.matshow(self.data, aspect='auto')
 
     def on_save_plot(self, event):
         file_choices = "PNG (*.png)|*.png"
@@ -173,6 +195,39 @@ class GraphFrame(wx.Frame):
 
     def on_flash_status_off(self, event):
         self.statusbar.SetStatusText('')
+
+    # Updatables
+    def on_update_mode(self, event):
+        print "hello"
+
+    def on_update_view_mode(self, event):
+        None
+
+    def on_update_cl(self, event):
+        None
+
+    def on_update_w0(self, event):
+        # @todo Make sure w0 is valid then update
+        None
+
+    def on_update_cl(self, event):
+        None
+
+    # Start conditions
+    def on_update_start(self, event):
+        self.datagen.mode = self.StartConditions.GetSelection()
+
+    def on_update_boundaries(self, event):
+        self.datagen.boundaries = self.Boundaries.GetSelection()
+
+    def on_update_time_steps(self, event):
+        self.datagen.interations_left = int(self.Time.GetValue())
+        event.Skip()
+
+    def on_reset_button(self, event):
+        self.on_reset(event)
+        self.datagen.interations_left = 100
+        self.Time.SetValue("100")
 
 if __name__ == '__main__':
     app = wx.App()

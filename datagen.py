@@ -11,9 +11,12 @@ UPDATING_SEQUENTIAL = 'sequential'
 UPDATING_SYNCHRONOUS = 'synchronous'
 UPDATING_CSEQUENTIAL = 'csequential'
 
-SPINS_FERROMANET = 'ferromanet'
-SPINS_ANTIFERROMAGNET = 'antiferromagnet'
-SPINS_RANDOM = 'random'
+SPINS_FERROMANET = 0
+SPINS_ANTIFERROMAGNET = 1
+SPINS_RANDOM = 2
+
+BOUNDARIES_CYCLIC = 0
+BOUNDARIES_SHARP = 1
 
 class DataGen(object):
     # update = sequential
@@ -21,22 +24,33 @@ class DataGen(object):
     # func = eval("lambda x: " + eq)
 
     def __init__(self, mode=SPINS_ANTIFERROMAGNET, size=300):
-        if mode == SPINS_FERROMANET:
-            init = self.ferromanet_spins(size)
-        elif mode == SPINS_ANTIFERROMAGNET:
-            init = self.antiferromanet_spins(size)
-        else:
-            init = self.random_spins(size)
-        self.data = self.init = init
+        self.data = self.init = self.ferromanet_spins(size)
         self.interations_left = 100
-        self.boundaries = "cyclic"
+        self.boundaries = BOUNDARIES_CYCLIC
+        self.running = False
+        self.mode = 0
+        self.size = size
         self.cL = 1/size
         self.w0 = (lambda i=0, L=0, cL=0: 0.5)
         self.updating = UPDATING_SEQUENTIAL
 
+    def initialise(self):
+        self.running = False
+        self.data = self.ferromanet_spins(self.size)
+        return self.data
+
     def next(self):
-        self._recalc_data()
-        self.interations_left -= 1
+        if not self.running:
+            self.running = True
+            if self.mode == SPINS_FERROMANET:
+                self.data = self.ferromanet_spins(self.size)
+            elif self.mode == SPINS_ANTIFERROMAGNET:
+                self.data = self.antiferromanet_spins(self.size)
+            else:
+                self.data = self.random_spins(self.size)
+        if self.interations_left > 0:
+            self.interations_left -= 1
+            self._recalc_data()
         return self.data
 
     def _recalc_data(self):
@@ -87,8 +101,8 @@ class DataGen(object):
         return all(v is SPIN_UP for v in spins) or all(v is SPIN_DOWN for v in spins)
 
     def random_spins(self, size):
-        # return [ random.randrange(0, 2) for _ in range(0, 15) ]
-        return numpy.random.randint(2, size=size)
+        return [ random.randrange(0, 2) for _ in range(0, size) ]
+        # return numpy.random.randint(2, size=size)
 
     def antiferromanet_spins(self, size):
         return [ i%2 for i in range(0,size) ]
@@ -97,8 +111,16 @@ class DataGen(object):
         return [ SPIN_UP for i in range(0,size) ]
 
     def get_neigbours(self, index, lst):
-        left  = (index-1) % len(lst)
-        right = (index+1) % len(lst)
+        if self.boundaries == BOUNDARIES_CYCLIC:
+            left  = (index-1) % len(lst)
+            right = (index+1) % len(lst)
+        else: # BOUNDARIES_SHARP
+            left  = (index-1)
+            right = (index+1)
+            if index == 0:          # 1st element
+                left = index
+            if index == len(lst):   # last element
+                right = len(lst)
         return (lst[left], lst[right])
 
     def flip_spin(self, spin):
