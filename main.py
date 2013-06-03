@@ -16,11 +16,18 @@ import pylab
 from datagen import DataGen
 from boundcontrolbox import BoundControlBox
 
+UPDATING_SEQUENTIAL = 0
+UPDATING_CSEQUENTIAL = 1
+UPDATING_SYNCHRONOUS = 2
+
+VIEW_MODE_ALL = 0
+VIEW_MODE_FOLLOW = 1
+
 class GraphFrame(wx.Frame):
     title = 'Magnetizr'
     time_step = 100 # 100ms
     def __init__(self):
-        wx.Frame.__init__(self, None, -1, self.title, size=(950,590))
+        wx.Frame.__init__(self, None, -1, self.title, size=(1230,610))
 
         self.datagen = DataGen()
         self.data = [self.datagen.initialise()]
@@ -67,39 +74,44 @@ class GraphFrame(wx.Frame):
         # UPDATABLE
         Updatable = wx.StaticBoxSizer( wx.StaticBox( self, wx.ID_ANY, u"Updating" ), wx.VERTICAL )
         #   Updating mode
-        UpdateModes = ["Sequential", "Synchronous", "CSequential"]
-        Update = wx.RadioBox(self, wx.ID_ANY, "Update Mode",  wx.DefaultPosition, wx.DefaultSize, UpdateModes, 1, wx.RA_SPECIFY_COLS)
-        Updatable.Add( Update, 1, wx.EXPAND|wx.ALIGN_CENTER_HORIZONTAL, 5 )
-        Update.Bind(wx.EVT_RADIOBUTTON, self.on_update_mode)
+        UpdateModes = ["Sequential", "CSequential","Synchronous"]
+        self.UpdateMode = wx.RadioBox(self, wx.ID_ANY, "Update Mode",  wx.DefaultPosition, wx.DefaultSize, UpdateModes, 1, wx.RA_SPECIFY_COLS)
+        Updatable.Add( self.UpdateMode, 1, wx.EXPAND|wx.ALIGN_CENTER_HORIZONTAL, 5 )
+        self.UpdateMode.Bind(wx.EVT_RADIOBUTTON, self.on_update_mode)
         #   Plot view
-        PlotView = wx.RadioBox(self, wx.ID_ANY, "Plot view",  wx.DefaultPosition, wx.DefaultSize, ["Follow", "See all"], 1, wx.RA_SPECIFY_COLS)
-        Updatable.Add( PlotView, 1, wx.EXPAND, 5 )
+        self.PlotView = wx.RadioBox(self, wx.ID_ANY, "Plot view",  wx.DefaultPosition, wx.DefaultSize, ["See all", "Follow"], 1, wx.RA_SPECIFY_COLS)
+        Updatable.Add( self.PlotView, 1, wx.EXPAND, 5 )
+        self.PlotView.Bind(wx.EVT_RADIOBUTTON, self.on_view_update)
         #   CL size
         CLSize = wx.StaticBoxSizer( wx.StaticBox( self, wx.ID_ANY, u"cL" ), wx.VERTICAL )
-        self.CL = wx.Slider( self, wx.ID_ANY, 50, 0, 100, wx.DefaultPosition, wx.DefaultSize, wx.SL_HORIZONTAL )
+        self.CL = wx.Slider( self, wx.ID_ANY, 1, 1, 200, wx.DefaultPosition, wx.DefaultSize, wx.SL_HORIZONTAL )
+        self.Bind(wx.EVT_SLIDER, self.on_update_cl ,self.CL)
         CLSize.Add( self.CL, 0, wx.ALL, 5 )
         Updatable.Add( CLSize, 1, 0, 5 )
+        self.CLStatus = wx.StaticText( self, wx.ID_ANY, u"cL=1", wx.DefaultPosition, wx.DefaultSize, 0 )
+        CLSize.Add( self.CLStatus, 0, wx.ALL, 5 )
+
         #   W0
         WZero = wx.StaticBoxSizer( wx.StaticBox( self, wx.ID_ANY, u"W0" ), wx.VERTICAL )
         self.W0 = wx.TextCtrl( self, wx.ID_ANY, u"(cL/L)*i*1.0", wx.DefaultPosition, wx.DefaultSize, 0 )
         WZero.Add( self.W0, 0, wx.ALL, 5 )
+        self.AddW0Btn = wx.Button(self, label="Set")
+        self.Bind(wx.EVT_BUTTON, self.on_update_w0 ,self.AddW0Btn)
+        WZero.Add( self.AddW0Btn, 0, wx.ALL, 5 )
+        self.W0Status = wx.StaticText( self, wx.ID_ANY, u"W0(i,cL,L)=0.5", wx.DefaultPosition, wx.DefaultSize, 0 )
+        WZero.Add( self.W0Status, 0, wx.ALL, 5 )
         Updatable.Add( WZero, 1, wx.EXPAND, 5 )
-        #   Simulation speed
-        SimulSpeed = wx.StaticBoxSizer( wx.StaticBox( self, wx.ID_ANY, u"Timestep lenght" ), wx.VERTICAL )
-        self.SimSpeed = wx.Slider( self, wx.ID_ANY, 100, 0, 1000, wx.DefaultPosition, wx.DefaultSize, wx.SL_HORIZONTAL )
-        SimulSpeed.Add( self.SimSpeed, 0, wx.ALL, 5 )
-        self.SimSpeedTxt = wx.StaticText(self, wx.ID_ANY, "100ms", wx.DefaultPosition, wx.DefaultSize)
-        SimulSpeed.Add( self.SimSpeedTxt, 0, wx.ALL, 5 )
-        Updatable.Add( SimulSpeed, 1, 0, 5 )
 
         # SIMULATION CONTROLS
         Simulation = wx.StaticBoxSizer( wx.StaticBox( self, wx.ID_ANY, u"Simulation" ), wx.HORIZONTAL )
         #   Starting conditions
         self.StartConditions = wx.RadioBox(self, wx.ID_ANY, "Starting",  wx.DefaultPosition, wx.DefaultSize, ["Ferromagnet", "Antiferromagnet", "Random"], 1, wx.RA_SPECIFY_COLS)
+        self.StartConditions.SetSelection(self.datagen.mode)
         Simulation.Add( self.StartConditions, 1, wx.EXPAND, 5 )
         self.StartConditions.Bind(wx.EVT_RADIOBUTTON, self.on_update_start)
         #   Boundaries
         self.Boundaries = wx.RadioBox(self, wx.ID_ANY, "Boundaries",  wx.DefaultPosition, wx.DefaultSize, ["Cyclic", "Sharp(table)"], 1, wx.RA_SPECIFY_COLS)
+        self.Boundaries.SetSelection(self.datagen.boundaries)
         Simulation.Add( self.Boundaries, 1, wx.EXPAND, 5 )
         self.Boundaries.Bind(wx.EVT_RADIOBUTTON, self.on_update_boundaries)
         #   Time steps
@@ -117,6 +129,14 @@ class GraphFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.on_reset_button ,self.ResetBtn)
         StartStop.Add( self.ResetBtn, 0, wx.ALL, 5 )
         Simulation.Add( StartStop, 1, wx.EXPAND, 5 )
+        #   Simulation speed
+        SimulSpeed = wx.StaticBoxSizer( wx.StaticBox( self, wx.ID_ANY, u"Timestep lenght" ), wx.VERTICAL )
+        self.SimSpeed = wx.Slider( self, wx.ID_ANY, 100, 1, 1000, wx.DefaultPosition, wx.DefaultSize, wx.SL_HORIZONTAL )
+        self.SimSpeed.Bind(wx.EVT_SLIDER, self.on_update_timestep)
+        SimulSpeed.Add( self.SimSpeed, 0, wx.ALL, 5 )
+        self.SimSpeedTxt = wx.StaticText(self, wx.ID_ANY, str(self.time_step)+"ms", wx.DefaultPosition, wx.DefaultSize)
+        SimulSpeed.Add( self.SimSpeedTxt, 0, wx.ALL, 5 )
+        Simulation.Add( SimulSpeed, 1, 0, 5 )
 
         self.MainGrid.Add( Plot, 1, wx.ALIGN_LEFT|wx.ALIGN_TOP, 5 )
         self.MainGrid.Add( Updatable, 1, wx.ALIGN_RIGHT|wx.ALIGN_TOP, 5 )
@@ -124,11 +144,11 @@ class GraphFrame(wx.Frame):
 
         self.SetSizer( self.MainGrid )
         self.Layout()
-        self.Centre( wx.BOTH )
+        # self.Centre( wx.BOTH )
 
     def init_plot(self):
         self.dpi = 100
-        self.fig = Figure((6.7, 3.3), dpi=self.dpi)
+        self.fig = Figure((9.6, 3.7), dpi=self.dpi)
         self.axes = self.fig.add_subplot(1,1,1)
         self.axes.axes.get_xaxis().set_visible(False)
         self.axes.axes.get_yaxis().set_visible(False)
@@ -139,6 +159,16 @@ class GraphFrame(wx.Frame):
     def draw_plot(self):
         self.plot_data.set_data(self.data)
         self.canvas.draw()
+        if self.datagen.interations_left == 0:
+            self.on_counter_0(None)
+
+    def on_view_update(self, event):
+        1
+        # if self.PlotView.GetSelection() == VIEW_MODE_FOLLOW:
+        #     self.plot_data = self.axes.matshow(self.data[-20:], aspect='auto')
+        #     self.plot_data.set_data(self.data[-20:])
+        # else:
+        #     # self.PlotView.GetSelection()
 
     def on_pause_button(self, event):
         self.paused = not self.paused
@@ -149,11 +179,17 @@ class GraphFrame(wx.Frame):
             self.plot_data = self.axes.matshow(self.data, aspect='auto')
 
     def on_reset(self, event):
+        self.on_simulation_stop(event)
+        self.data = [self.datagen.initialise()]
+        self.plot_data = self.axes.matshow(self.data, aspect='auto')
+
+    def on_counter_0(self, event):
+        self.on_simulation_stop(event)
+
+    def on_simulation_stop(self, event):
         self.paused = True
         self.StartStopBtn.SetLabel("Start")
         self.running = False
-        self.data = [self.datagen.initialise()]
-        self.plot_data = self.axes.matshow(self.data, aspect='auto')
 
     def on_save_plot(self, event):
         file_choices = "PNG (*.png)|*.png"
@@ -198,20 +234,49 @@ class GraphFrame(wx.Frame):
 
     # Updatables
     def on_update_mode(self, event):
-        print "hello"
+        selection = self.UpdateMode.GetSelection()
+        if   selection == UPDATING_SEQUENTIAL: # cl = 1
+            cL = 1
+        elif selection == UPDATING_CSEQUENTIAL: # 1 < cL < size
+            cL = int(self.datagen.size/2)
+        elif selection == UPDATING_SYNCHRONOUS: # cL = size
+            cL = self.datagen.size
+        self.on_update_cl(None, with_update_mode = False, cL = cL)
+        self.datagen.cL = cL
+
+    def on_update_cl(self, event, with_update_mode = True, cL = None):
+        if cL == None:
+            cL = self.CL.GetValue()
+        if with_update_mode:
+            if cL == 1:
+                self.UpdateMode.SetSelection(UPDATING_SEQUENTIAL)
+            elif cL == self.datagen.size:
+                self.UpdateMode.SetSelection(UPDATING_SYNCHRONOUS)
+            else:
+                self.UpdateMode.SetSelection(UPDATING_CSEQUENTIAL)
+        self.CL.SetValue(cL)
+        self.CLStatus.SetLabel("cL=%i" % cL)
+        self.datagen.cL = cL
 
     def on_update_view_mode(self, event):
-        None
-
-    def on_update_cl(self, event):
-        None
+        print "update view"
 
     def on_update_w0(self, event):
         # @todo Make sure w0 is valid then update
-        None
+        eq = self.W0.GetValue()
+        w0 = eval("lambda i=0, L=0, cL=0: " + eq)
+        try:
+            w0(1,1,1)
+            self.datagen.w0 = w0
+            self.W0Status.SetLabel("W0(i,cL,L)="+eq)
+        except:
+            self.W0Status.SetLabel("ERR")
 
-    def on_update_cl(self, event):
-        None
+    def on_update_timestep(self, event):
+        self.redraw_timer.Stop()
+        self.time_step = self.SimSpeed.GetValue()
+        self.SimSpeedTxt.SetLabel(str(self.time_step)+"ms")
+        self.redraw_timer.Start(self.time_step)
 
     # Start conditions
     def on_update_start(self, event):
