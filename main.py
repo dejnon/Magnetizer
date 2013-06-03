@@ -134,7 +134,7 @@ class GraphFrame(wx.Frame):
         Simulation.Add( StartStop, 1, wx.EXPAND, 5 )
         #   Simulation speed
         SimulSpeed = wx.StaticBoxSizer( wx.StaticBox( self, wx.ID_ANY, u"Timestep lenght" ), wx.VERTICAL )
-        self.SimSpeed = wx.Slider( self, wx.ID_ANY, 100, 1, 1000, wx.DefaultPosition, wx.DefaultSize, wx.SL_HORIZONTAL )
+        self.SimSpeed = wx.Slider( self, wx.ID_ANY, 100, 100, 1000, wx.DefaultPosition, wx.DefaultSize, wx.SL_HORIZONTAL )
         self.SimSpeed.Bind(wx.EVT_SLIDER, self.on_update_timestep)
         SimulSpeed.Add( self.SimSpeed, 0, wx.ALL, 5 )
         self.SimSpeedTxt = wx.StaticText(self, wx.ID_ANY, str(self.time_step)+"ms", wx.DefaultPosition, wx.DefaultSize)
@@ -148,6 +148,7 @@ class GraphFrame(wx.Frame):
         self.SetSizer( self.MainGrid )
         self.Layout()
         # self.Centre( wx.BOTH )
+
 
     def init_plot(self):
         self.dpi = 100
@@ -164,10 +165,11 @@ class GraphFrame(wx.Frame):
             if len(self._data) > self.follow_last:
                 return self._data[(-self.follow_last):]
         return self._data
+
     def set_data(self, value):
         self._data = value
-    data = property(get_data, set_data)
 
+    data = property(get_data, set_data)
 
     def draw_plot(self):
         self.plot_data.set_data(self.data)
@@ -194,10 +196,13 @@ class GraphFrame(wx.Frame):
     def on_pause_button(self, event):
         self.paused = not self.paused
         self.StartStopBtn.SetLabel("Start" if self.paused else "Stop")
+        if self.paused:
+            self.Time.Enable()
         if not self.running:
             self.running = True
             self.data = [self.datagen.next()]
             self.plot_data = self.axes.matshow(self.data, aspect="auto")
+            self.lockdown_on()
 
     def on_reset(self, event):
         self.on_simulation_stop(event)
@@ -211,6 +216,7 @@ class GraphFrame(wx.Frame):
         self.paused = True
         self.StartStopBtn.SetLabel("Start")
         self.running = False
+        self.lockdown_off()
 
     def on_save_plot(self, event):
         file_choices = "PNG (*.png)|*.png"
@@ -270,9 +276,6 @@ class GraphFrame(wx.Frame):
         self.CLStatus.SetLabel("cL=%i" % cL)
         self.datagen.cL = cL
 
-    def on_update_view_mode(self, event):
-        print "update view"
-
     def on_update_w0(self, event):
         eq = self.W0.GetValue()
         w0 = eval("lambda i=0, L=0, cL=0: " + eq)
@@ -287,6 +290,7 @@ class GraphFrame(wx.Frame):
         self.redraw_timer.Stop()
         self.time_step = self.SimSpeed.GetValue()
         self.SimSpeedTxt.SetLabel(str(self.time_step)+"ms")
+        self.Bind(wx.EVT_TIMER, self.on_redraw_timer, self.redraw_timer)
         self.redraw_timer.Start(self.time_step)
 
     # Start conditions
@@ -304,6 +308,16 @@ class GraphFrame(wx.Frame):
         self.on_reset(event)
         self.datagen.interations_left = 100
         self.Time.SetValue("100")
+
+    def lockdown_on(self, event=None):
+        self.StartConditions.Disable()
+        self.Time.Disable()
+        self.Boundaries.Disable()
+
+    def lockdown_off(self, event=None):
+        self.StartConditions.Enable()
+        self.Time.Enable()
+        self.Boundaries.Enable()
 
 if __name__ == '__main__':
     app = wx.App()
