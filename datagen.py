@@ -56,17 +56,6 @@ class DataGen(object):
         if not self.is_uniform(self.data):
             self.data = self.csequential(self.data, self.w0, self.cL, self.boundaries)
 
-    # def sequential(self, spins, w0):
-    #     original_spins = spins[:]
-    #     while (not self.is_uniform(spins)) and (original_spins == spins):
-    #         random_index = random.randint(0, len(spins)-1)
-    #         (spin_left, spin_right) = self.get_neigbours(random_index, spins)
-    #         if spin_left == spin_right:
-    #             spins[random_index] = spin_left
-    #         elif w0(i=random_index, L=len(spins), cL=(1/len(spins))) < random.random():
-    #             spins[random_index] = self.flip_spin(spins[random_index])
-    #     return spins
-
     def csequential(self, spins, w0, cL, boundaries):
         # for i in xrange(0, self.size):
         #     if w0(cL=cL, L=len(spins), i=i) > randfloat():
@@ -84,31 +73,6 @@ class DataGen(object):
                 updated_s[random_index] = self.flip_spin(spins[random_index])
             updated_indexes.append(random_index)
         return updated_s
-
-    # def csequential(spins, w0, cL):
-    #     cL_spins = int(len(spins)*cL) # for L = 12 and cL = 0.5 then cL_spins = 6
-    #     while timeout:
-    #         random_index = randint(0, len(spins)-1)
-    #         if w0(cL=cL, L=len(spins), i=random_index) > randfloat():
-    #             for i in xrange(random_index, (random_index+cL_spins)):
-    #                 i = i % len(spins) # spins on the circle
-    #                 spins[i] = flip_spin(spins[i])
-    #         iteration_callback(spins)
-    #         timeout -= 1
-    #     return spins
-
-    # def synchronous(spins, w0):
-    #     while timeout:
-    #         spins_copy = list(spins)
-    #         for index in xrange(0,len(spins)):
-    #             random_index = randint(0, len(spins)-1)
-    #             (spin_left, spin_right) = getNeigbours(random_index, spins)
-    #             if spin_left == spin_right:
-    #                 S[random_index] = spin_left
-    #             elif w0(i=random_index, L=len(spins)) < randfloat():
-    #                 S[random_index] = flip_spin(S[random_index])
-    #         timeout -= 1
-    #     return spins
 
     def is_uniform(self, spins):
         return all(v is SPIN_UP for v in spins) or all(v is SPIN_DOWN for v in spins)

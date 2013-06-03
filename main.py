@@ -30,9 +30,12 @@ class GraphFrame(wx.Frame):
         wx.Frame.__init__(self, None, -1, self.title, size=(1230,610))
 
         self.datagen = DataGen()
-        self.data = [self.datagen.initialise()]
+        self._data = [self.datagen.initialise()]
         self.paused = True
         self.running = False
+
+        self.plot_view = VIEW_MODE_ALL
+        self.follow_last = 10 # lines
 
         self.create_menu()          # shortcuts
         self.create_status_bar()    # line at the bottom
@@ -154,7 +157,17 @@ class GraphFrame(wx.Frame):
         self.axes.axes.get_yaxis().set_visible(False)
         self.fig.tight_layout()
         self.canvas = FigCanvas(self, -1, self.fig)
-        self.plot_data = self.axes.matshow(self.data, aspect='auto')
+        self.plot_data = self.axes.matshow(self.data, aspect="auto")
+
+    def get_data(self):
+        if self.plot_view == VIEW_MODE_FOLLOW:
+            if len(self._data) > self.follow_last:
+                return self._data[(-self.follow_last):]
+        return self._data
+    def set_data(self, value):
+        self._data = value
+    data = property(get_data, set_data)
+
 
     def draw_plot(self):
         self.plot_data.set_data(self.data)
@@ -162,13 +175,21 @@ class GraphFrame(wx.Frame):
         if self.datagen.interations_left == 0:
             self.on_counter_0(None)
 
+    def flash_status_message(self, msg, flash_len_ms=1500):
+        self.statusbar.SetStatusText(msg)
+        self.timeroff = wx.Timer(self)
+        self.Bind(
+            wx.EVT_TIMER,
+            self.on_flash_status_off,
+            self.timeroff)
+        self.timeroff.Start(flash_len_ms, oneShot=True)
+
     def on_view_update(self, event):
-        1
-        # if self.PlotView.GetSelection() == VIEW_MODE_FOLLOW:
-        #     self.plot_data = self.axes.matshow(self.data[-20:], aspect='auto')
-        #     self.plot_data.set_data(self.data[-20:])
-        # else:
-        #     # self.PlotView.GetSelection()
+        self.plot_view = self.PlotView.GetSelection()
+        if self.plot_view == VIEW_MODE_FOLLOW:
+            self.plot_data = self.axes.matshow(self.data, aspect="auto")
+        else:
+            self.plot_data = self.axes.matshow(self.data, aspect="auto")
 
     def on_pause_button(self, event):
         self.paused = not self.paused
@@ -176,12 +197,12 @@ class GraphFrame(wx.Frame):
         if not self.running:
             self.running = True
             self.data = [self.datagen.next()]
-            self.plot_data = self.axes.matshow(self.data, aspect='auto')
+            self.plot_data = self.axes.matshow(self.data, aspect="auto")
 
     def on_reset(self, event):
         self.on_simulation_stop(event)
         self.data = [self.datagen.initialise()]
-        self.plot_data = self.axes.matshow(self.data, aspect='auto')
+        self.plot_data = self.axes.matshow(self.data, aspect="auto")
 
     def on_counter_0(self, event):
         self.on_simulation_stop(event)
@@ -211,7 +232,7 @@ class GraphFrame(wx.Frame):
         # if paused do not add data, but still redraw the plot
         # (to respond to scale modifications, grid change, etc.)
         if not self.paused:
-            self.data.append(self.datagen.next())
+            self._data.append(self.datagen.next())
             self.Time.SetValue(str(self.datagen.interations_left))
         if self.datagen.interations_left <= 0:
             self.paused = True
@@ -219,15 +240,6 @@ class GraphFrame(wx.Frame):
 
     def on_exit(self, event):
         self.Destroy()
-
-    def flash_status_message(self, msg, flash_len_ms=1500):
-        self.statusbar.SetStatusText(msg)
-        self.timeroff = wx.Timer(self)
-        self.Bind(
-            wx.EVT_TIMER,
-            self.on_flash_status_off,
-            self.timeroff)
-        self.timeroff.Start(flash_len_ms, oneShot=True)
 
     def on_flash_status_off(self, event):
         self.statusbar.SetStatusText('')
@@ -262,7 +274,6 @@ class GraphFrame(wx.Frame):
         print "update view"
 
     def on_update_w0(self, event):
-        # @todo Make sure w0 is valid then update
         eq = self.W0.GetValue()
         w0 = eval("lambda i=0, L=0, cL=0: " + eq)
         try:
