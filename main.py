@@ -1,5 +1,4 @@
 import os
-import pprint
 import random
 import sys
 import wx
@@ -14,7 +13,7 @@ import numpy as np
 import pylab
 
 from datagen import DataGen
-from boundcontrolbox import BoundControlBox
+# from boundcontrolbox import BoundControlBox
 
 UPDATING_SEQUENTIAL = 0
 UPDATING_CSEQUENTIAL = 1
